@@ -1,34 +1,55 @@
 class GameScreen {
-    constructor(array) {
+    constructor(array, level) {
+
+        /***** GAME *****/
+        this.level = level;
+        this.score = 0;
+        this.gameOver = false;
+        this.win = false;
+
+        /***** CANVAS *****/
         this.canvas = this.createCanvas();
         this.canvasWidth = this.getWidth();
         this.canvasHeight = this.getHeight();
-        this.x = 30;
-        this.y = 400;
+
+        /***** BALL *****/
+
+        this.x = this.canvasWidth/2+'';
+        this.y = 390;
         this.xNegative = false;
-        this.yNegative = false;
+        this.yNegative = true;
         this.ball = this.drawBall();
+
+         /***** BLOCKS *****/
+
         this.blocks = array; // Holds which blocks are drawn
         this.blockCoordinates = []; // holds all the coordinates used to checkBallOverBlocks()
         this.blockWidth= this.setBlockWidth();
         this.blockHeight = this.setBlockHeight();
         this.blockSpacing = this.setPadding(); 
-        this.paddleX;
-        this.paddleY = '400';
-        this.gameOver = false;
+
+        /***** PADDLE *****/
+
         this.paddleWidth = '60';
         this.paddleHeight = '15';
+        this.paddleX = ((parseFloat(this.canvasWidth) / 2) - this.paddleWidth / 2) + '';
+        this.paddleY = '400';
+        this.paddle = this.drawPaddle();
+
     }
 
     /*************************** CANVAS ***************************************/
 
     createCanvas() {
+        let width = 600;
+        let height = 500;
         let body = d3.select('body');
         let canvas
             = body.append('svg')
-                .attr('width', '600')
-                .attr('height', '500')
+                .attr('width', width+'')
+                .attr('height', height+'')
                 .style('background-color', 'red');
+        
 
         return canvas;
     }
@@ -54,7 +75,6 @@ class GameScreen {
             .style('fill', 'yellow')
             .attr('cx', this.x + '')
             .attr('cy', this.y + "");
-
     }
 
     moveBall() {
@@ -97,8 +117,8 @@ class GameScreen {
     }
 
     checkBottomWall() {
-        // If the ball is at the bottom edge of the canvas, reflect it back up
-        if (this.y > this.canvasHeight) this.yNegative = true; // true
+        // If the ball is at the bottom edge of the canvas, the game is over
+        if (this.y > this.canvasHeight) this.gameOver = true; // true
     }
 
     /************************* COORDINATES ************************************/
@@ -126,7 +146,7 @@ class GameScreen {
 
     setBlockHeight() {
         // Set heights of the individual blocks trying to breakthrough
-        return this.canvasHeight / (this.blocks.length*10);
+        return this.canvasHeight / (this.blocks.length*5);
     }
 
     setPadding(){
@@ -136,6 +156,7 @@ class GameScreen {
     }
 
     drawBlocks(){
+        
         let blockCoord = [];
         for(let i=0; i< this.blocks.length; i++){
             let row = [];
@@ -148,10 +169,11 @@ class GameScreen {
                     row.push(this.boundsObject(x,y,i,j));
                     // Draw the block
                     this.drawBlock(x,y,i,j);
+                    
             }
             blockCoord.push(row);
         }
-        
+        this.drawScoreAndLevelInfo(); 
         this.blockCoordinates = blockCoord;
         
     }
@@ -207,7 +229,9 @@ class GameScreen {
                     && this.x < this.blockCoordinates[i][j].rightX
                     && this.y > this.blockCoordinates[i][j].topY 
                     ){
-                        continueCheck = this.changeBlocks(i, j); // Dont check any more blocks in this instance  
+                        continueCheck = this.changeBlocks(i, j); // Dont check any more blocks in this instance
+                        this.scoreIncrement();
+                        
                 }
             }
         }       
@@ -221,15 +245,15 @@ class GameScreen {
             d3.select('#paddle').remove() // Remove last location
             let xCoord = d3.event.pageX;
             this.paddleX = xCoord;
-            this.drawPaddle(xCoord)
+            this.drawPaddle()
             
         })
     }
 
-    drawPaddle(xCoord){
+    drawPaddle(){
         d3.select('svg').append('rect')
             .attr('id','paddle')
-            .attr('x', xCoord+"")
+            .attr('x', this.paddleX+"")
             .attr('y', this.paddleY) // y coordinate always the same
             .attr('width', this.paddleWidth)
             .attr('height', this.paddleHeight)
@@ -250,41 +274,158 @@ class GameScreen {
         
     }
 
+    /**************************** GAME LOGIC *********************************/
+    scoreIncrement(){
+        // Increment the score
+        this.score += 10;
+    }
     gameDone(){
         // Called in playGame and will stop game and change level when true
-        return this.blocks.every((val1) => val1.every((val2) => val2 === 0));
+        // Game is over if all blocks are destroyed or ball leaves the bottom of screen (this.checkBottomWall())
+        let checkBlocksGone = this.blocks.every((val1) => val1.every((val2) => val2 === 0));
+        if(checkBlocksGone){
+            this.win = true;
+        }
+        return this.gameOver || this.blocks.every((val1) => val1.every((val2) => val2 === 0));
+    }
+
+    gameWon(){
+        return this.win;
+    }
+
+
+    drawScoreAndLevelInfo(){
+        d3.select('#score-value').remove();
+        // Called in drawBall()
+        d3.select('svg').append('text')
+            .attr('id','score-value')
+            .text('SCORE: '+this.score)
+            .attr('x', 10+"")
+            .attr('y', (this.canvasHeight - 10)+"")
+            .attr("font-size", "30")
+            .style('fill', 'yellow')
+            .style('z-index','1');
+        
+        d3.select('svg').append('text')
+            .attr('id', 'level-value')
+            .text('LEVEL: ' + this.level)
+            .attr('x', (this.canvasWidth-150)+'')
+            .attr('y', (this.canvasHeight - 10) + "")
+            .attr("font-size", "30")
+            .style('fill', 'yellow')
+            .style('z-index', '1');
     }
 }
 
 /******************************** PLAY GAME ***********************************/
 class Game{
     constructor(){
-        this.level = 0;
+        this.level = 1;
         this.score = 0;
         this.gameOver = false;
+        this.start = false;
+        this.levels = {
+            '1': [[1, 1, 1, 1, 1], [1, 1, 1, 1, 1]],
+            '2': [[1, 1, 1, 1, 1], [1, 1, 1, 1, 1], [1, 1, 1, 1, 1]],
+            '3': [[1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]],
+            '4': [[1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]],
+            '5': [[1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]],
+            '6': [[1, 1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1, 1]]
+
+        }
+    }
+
+    playGame = (array,level) => {
+        let screen = new GameScreen(array, level);
+        screen.drawBlocks();
+        
+        d3.select('svg').on('click', () => {
+            d3.select('#lose-banner').remove();
+            // When user clicks screen the game starts
+            this.start = true;
+            
+        });
+        // Start game logic
+        let game = setInterval(() => {this.afterClick(screen)}, 1);
+    }
+
+    afterClick(screen){
+        // After user clicks, this.start === true and the ball starts moving
+        if (this.start) {
+            screen.moveBall(); // Start moving ball
+
+            let redraw = screen.checkBallOverBlocks(); // Check if ball hit block
+            screen.checkPaddleHit(); // Check if ball hit paddle
+            if (!redraw) {
+                // If the ball hit a block, then redraw the board
+                screen.drawBlocks();
+                screen.movePaddle();
+            }
+            screen.movePaddle(); // Paddle follows mouse
+            // If gameOver === true
+            this.gameRestart(screen);
+        }
+    }
+    gameRestart(screen){
+        // This will restart the game if gameOver or switching to next level
+        if (screen.gameDone()) {
+            this.start = false; // Stop the game
+            if(!screen.gameWon()){
+                // If ball falls below bottom of screen
+                this.level = 1;
+                d3.select('svg').append('text')
+                    .attr('id', 'lose-banner')
+                    .text('YOU LOSE! CLICK TO PLAY AGAIN.')
+                    .attr('x','52')
+                    // .attr('x', (this.canvasWidth - 150) + '')
+                    .attr('y', (d3.select('svg').attr('height')/2) + "")
+                    .attr("font-size", "30")
+                    .style('fill', 'yellow')
+                    .style('z-index', '1');
+                
+                d3.select('svg').on('click',()=>{
+                    d3.select('svg').remove();
+                    this.startGame();
+                })
+                console.log('YOU LOSE!')
+
+            }else if (screen.gameWon()) {
+                this.level = this.level += 1;
+                // If all blocks are hit then clear screen and move to next level
+                // Move ball and paddle to center of screen
+                console.log('WIN');
+                d3.select('svg').remove();
+                this.startGame();
+            }
+        }
+    }
+
+    getLevel(){
+        return this.level;
+    }
+
+    startGame(){
+        let game = new Game();
+        // playGame([[1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]]);
+        if (game.getLevel() <= (Object.keys(this.levels).length)) {
+            game.playGame(this.levels[this.level], this.level);
+
+            d3.select('svg').append('text')
+                .attr('id', 'lose-banner')
+                .text('LEVEL ' + this.level + " - CLICK TO PLAY")
+                .attr('x', '112')
+                .attr('y', (d3.select('svg').attr('height') / 2) + "")
+                .attr("font-size", "30")
+                .style('fill', 'yellow')
+                .style('z-index', '1');
+        }
     }
 }
 
-playGame=(array)=>{
-    let screen = new GameScreen(array);
-    screen.drawBlocks();
-      
-    setInterval(() => {
-        screen.moveBall();
-        
-        let redraw = screen.checkBallOverBlocks();
-        screen.checkPaddleHit(); // Check if ball hit paddle
-        if (!redraw) {
-            // If the ball hit a block, then redraw the board
-            screen.drawBlocks();
-            screen.movePaddle();
-        }
-        screen.movePaddle();
-    }, 1);
-}
+let game = new Game();
+game.startGame();
 
-playGame([[1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]]);
-// playGame([[0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0]]);
+
 
 
 
