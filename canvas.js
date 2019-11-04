@@ -1,5 +1,5 @@
 class GameScreen {
-    constructor() {
+    constructor(array) {
         this.canvas = this.createCanvas();
         this.canvasWidth = this.getWidth();
         this.canvasHeight = this.getHeight();
@@ -8,13 +8,15 @@ class GameScreen {
         this.xNegative = false;
         this.yNegative = false;
         this.ball = this.drawBall();
-        this.blocks = [[1, 1, 1, 1, 1], [1, 1, 1, 1, 1]];
+        this.blocks = array; // Holds which blocks are drawn
         this.blockCoordinates = []; // holds all the coordinates used to checkBallOverBlocks()
         this.blockWidth= this.setBlockWidth();
         this.blockHeight = this.setBlockHeight();
-        this.blockSpacing = 16.66;
+        this.blockSpacing = this.setPadding();
     
     }
+
+    /*************************** CANVAS ***************************************/
 
     createCanvas() {
         let body = d3.select('body');
@@ -39,6 +41,7 @@ class GameScreen {
         return parseFloat(d3.select('svg').attr('height'));
     }
 
+    /*************************** BALL LOGIC ***********************************/
     drawBall() {
         // Used in the to draw the ball for every increment
         d3.select('svg')
@@ -74,22 +77,22 @@ class GameScreen {
 
     checkRightWall() {
         // If the ball is at the right edge of the canvas, reflect it back
-        if (this.x > this.canvasWidth) this.xNegative = true;
+        if (this.x > this.canvasWidth) this.xNegative = true; // true
     }
 
     checkLeftWall() {
         // If the ball is at the left edge of the canvas, reflect it back
-        if (this.x < 0) this.xNegative = false;
+        if (this.x < 0) this.xNegative = false; // false
     }
 
     checkTopWall() {
         // If the ball is at the top edge of the canvas, reflect it back
-        if (this.y < 0) this.yNegative = false;
+        if (this.y < 0) this.yNegative = false; // false
     }
 
     checkBottomWall() {
         // If the ball is at the bottom edge of the canvas, reflect it back up
-        if (this.y > this.canvasHeight) this.yNegative = true;
+        if (this.y > this.canvasHeight) this.yNegative = true; // true
     }
 
     /************************* COORDINATES ************************************/
@@ -112,22 +115,29 @@ class GameScreen {
 
     setBlockWidth() {
         // Set widths of the individual blocks trying to breakthrough
-        return this.canvasWidth / 6;
+        return this.canvasWidth / (this.blocks[0].length+1);
     }
 
     setBlockHeight() {
         // Set heights of the individual blocks trying to breakthrough
-        return this.canvasHeight / 30;
+        return this.canvasHeight / (this.blocks.length*10);
+    }
+
+    setPadding(){
+        // Get the rest of the space after the blocks take up their space and divide
+        // it by one more than the number of blocks to get the padding space
+        return (this.canvasWidth - (this.blockWidth*this.blocks[0].length)) / (this.blocks[0].length+1);
     }
     drawBlocks(){
         let blockCoord = [];
         for(let i=0; i< this.blocks.length; i++){
             let row = [];
-            for (let j = 0; j < this.blocks[0].length; j++) {
-                
+            for (let j = 0; j < this.blocks[0].length; j++) {             
                     // Only print block if it hasnt been deleted from hitting it
                     let y = this.blockSpacing + (i * (this.blockHeight + this.blockSpacing)) + "";
                     let x = this.blockSpacing + (j * (this.blockWidth + this.blockSpacing)) + "";
+
+                    // Used to be abe to determine of ball is within bounds of a block
                     row.push({
                         // Add values which will be used to check if ball hits block
                         print: (this.blocks[i][j]===1 ? true:false), // If block exists, print it
@@ -136,61 +146,70 @@ class GameScreen {
                         rightX:parseFloat(x)+this.blockWidth,
                         bottomY:parseFloat(y)+this.blockHeight
                     });
-                if (this.blocks[i][j]===1) {
-                    // Only draw the block if array value is 1
-                    d3.select('svg').append('rect')
-                        .attr('x', x)
-                        .attr('y', y)
-                        .attr('width', this.blockWidth + "")
-                        .attr('height', this.blockHeight + "")
-                        .style('fill', 'yellow')
-                }
 
+                    this.drawBlock(x,y,i,j);
+
+                
             }
             blockCoord.push(row);
-
         }
-        // console.log(this.blocks)
-        this.blockCoordinates = blockCoord;
         
-
+        this.blockCoordinates = blockCoord;
     }
 
-    changeBlocks(){
+    drawBlock(xCoord,yCoord,row,col){
+        // Draw individual block (called in drawBlocks())
+        if (this.blocks[row][col] === 1) {
+            // Only draw the block if array value is 1
+            d3.select('svg').append('rect')
+                .attr('x', xCoord)
+                .attr('y', yCoord)
+                .attr('width', this.blockWidth + "")
+                .attr('height', this.blockHeight + "")
+                .style('fill', 'yellow')
+        }
+    }
+
+    changeBlocks(i,j){
         // If the ball hits a certain block then remove it from the array and 
         // reprint the blocks on the screen with drawBlocks()
+        // If no block has been hit
+        // If ball is hitting the block then reverse movement and delete
+        this.yNegative = !this.yNegative; // Move ball opposite direction
+        this.blocks[i].splice(j, 1, 0); // Take out block hit
+        d3.select('svg').selectAll('rect').remove(); // Remove blocks, which are redrawn in interval
+        return false; // Dont continue check
     }
 
     checkBallOverBlocks(){
-        let continueCheck = true;
+        let continueCheck = true; // Check if should check any more blocks (if ball hits then false)
         
         for(let i=0; i < this.blockCoordinates.length;i++){
             for (let j = 0; j < this.blockCoordinates[0].length; j++) {
-                if (this.blockCoordinates[i][j].print && continueCheck && this.y < this.blockCoordinates[i][j].bottomY && this.x > this.blockCoordinates[i][j].leftX && this.x < this.blockCoordinates[i][j].rightX ){
-                    // If no block has been hit
-                    // If ball is hitting the block then reverse movement and delete
-                    this.yNegative = false;
-                    this.blocks[i].splice(j,1,0);
-                    d3.select('svg').selectAll('rect').remove();
-                    continueCheck = false;
-                    
-                    
+                // If hit a block
+                if (
+                    this.blockCoordinates[i][j].print 
+                    && continueCheck 
+                    && this.y < this.blockCoordinates[i][j].bottomY 
+                    && this.x > this.blockCoordinates[i][j].leftX 
+                    && this.x < this.blockCoordinates[i][j].rightX 
+                    ){
+                        continueCheck = this.changeBlocks(i, j); // Dont check any more blocks in this instance  
                 }
             }
-        }
-        
-        return continueCheck;
-        
-
+        }       
+        return continueCheck; // Return this so blocks are redrawn if false
     }
 }
 
-let screen = new GameScreen();
+/******************************** PLAY GAME ***********************************/
+let screen = new GameScreen([[1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]]);
 screen.drawBlocks();
 setInterval(() => {
     screen.moveBall();
     let redraw = screen.checkBallOverBlocks();
     if(!redraw){
+        // If the ball hit a block, then redraw the board
         screen.drawBlocks();
     }
     
