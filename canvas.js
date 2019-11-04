@@ -12,8 +12,12 @@ class GameScreen {
         this.blockCoordinates = []; // holds all the coordinates used to checkBallOverBlocks()
         this.blockWidth= this.setBlockWidth();
         this.blockHeight = this.setBlockHeight();
-        this.blockSpacing = this.setPadding();
-    
+        this.blockSpacing = this.setPadding(); 
+        this.paddleX;
+        this.paddleY = '400';
+        this.gameOver = false;
+        this.paddleWidth = '60';
+        this.paddleHeight = '15';
     }
 
     /*************************** CANVAS ***************************************/
@@ -64,6 +68,7 @@ class GameScreen {
         this.checkLeftWall();
         this.checkTopWall();
         this.checkBottomWall();
+        this.checkPaddleHit();
 
         // Set the new coordinates on the image
         d3.select("circle")
@@ -71,6 +76,7 @@ class GameScreen {
             .attr('cy', this.y)
 
         this.setCoordinates(x, y);
+        
     }
 
     /************************* CHECK WALLS ************************************/
@@ -128,6 +134,7 @@ class GameScreen {
         // it by one more than the number of blocks to get the padding space
         return (this.canvasWidth - (this.blockWidth*this.blocks[0].length)) / (this.blocks[0].length+1);
     }
+
     drawBlocks(){
         let blockCoord = [];
         for(let i=0; i< this.blocks.length; i++){
@@ -138,23 +145,26 @@ class GameScreen {
                     let x = this.blockSpacing + (j * (this.blockWidth + this.blockSpacing)) + "";
 
                     // Used to be abe to determine of ball is within bounds of a block
-                    row.push({
-                        // Add values which will be used to check if ball hits block
-                        print: (this.blocks[i][j]===1 ? true:false), // If block exists, print it
-                        leftX:parseFloat(x),
-                        topY:parseFloat(y),
-                        rightX:parseFloat(x)+this.blockWidth,
-                        bottomY:parseFloat(y)+this.blockHeight
-                    });
-
+                    row.push(this.boundsObject(x,y,i,j));
+                    // Draw the block
                     this.drawBlock(x,y,i,j);
-
-                
             }
             blockCoord.push(row);
         }
         
         this.blockCoordinates = blockCoord;
+        
+    }
+
+    boundsObject(xCoord,yCoord, row, col){
+         // Add values which will be used to check if ball hits block and is within its bounds
+        return {
+            print: (this.blocks[row][col] === 1 ? true : false), // If block exists, print it
+            leftX: parseFloat(xCoord),
+            topY: parseFloat(yCoord),
+            rightX: parseFloat(xCoord) + this.blockWidth,
+            bottomY: parseFloat(yCoord) + this.blockHeight
+        }
     }
 
     drawBlock(xCoord,yCoord,row,col){
@@ -162,6 +172,7 @@ class GameScreen {
         if (this.blocks[row][col] === 1) {
             // Only draw the block if array value is 1
             d3.select('svg').append('rect')
+                .attr('class','block')
                 .attr('x', xCoord)
                 .attr('y', yCoord)
                 .attr('width', this.blockWidth + "")
@@ -177,22 +188,24 @@ class GameScreen {
         // If ball is hitting the block then reverse movement and delete
         this.yNegative = !this.yNegative; // Move ball opposite direction
         this.blocks[i].splice(j, 1, 0); // Take out block hit
-        d3.select('svg').selectAll('rect').remove(); // Remove blocks, which are redrawn in interval
+        d3.select('svg').selectAll('.block').remove(); // Remove blocks, which are redrawn in interval
         return false; // Dont continue check
     }
 
     checkBallOverBlocks(){
+        // Called in playGame
         let continueCheck = true; // Check if should check any more blocks (if ball hits then false)
         
         for(let i=0; i < this.blockCoordinates.length;i++){
             for (let j = 0; j < this.blockCoordinates[0].length; j++) {
-                // If hit a block
+                // If hit a block, check ball not within bounds
                 if (
-                    this.blockCoordinates[i][j].print 
-                    && continueCheck 
+                    this.blockCoordinates[i][j].print // If this block is still not hit
+                    && continueCheck // If a block wasnt hit this check yet
                     && this.y < this.blockCoordinates[i][j].bottomY 
                     && this.x > this.blockCoordinates[i][j].leftX 
-                    && this.x < this.blockCoordinates[i][j].rightX 
+                    && this.x < this.blockCoordinates[i][j].rightX
+                    && this.y > this.blockCoordinates[i][j].topY 
                     ){
                         continueCheck = this.changeBlocks(i, j); // Dont check any more blocks in this instance  
                 }
@@ -200,20 +213,79 @@ class GameScreen {
         }       
         return continueCheck; // Return this so blocks are redrawn if false
     }
+
+    /***************************** PADDLE *************************************/
+    movePaddle(){
+        // Paddle will follow mouse movement
+        d3.select('svg').on('mousemove',()=>{
+            d3.select('#paddle').remove() // Remove last location
+            let xCoord = d3.event.pageX;
+            this.paddleX = xCoord;
+            this.drawPaddle(xCoord)
+            
+        })
+    }
+
+    drawPaddle(xCoord){
+        d3.select('svg').append('rect')
+            .attr('id','paddle')
+            .attr('x', xCoord+"")
+            .attr('y', this.paddleY) // y coordinate always the same
+            .attr('width', this.paddleWidth)
+            .attr('height', this.paddleHeight)
+            .style('fill', 'yellow')
+    }
+
+    checkPaddleHit(){
+        // Check that the ball hit the paddle
+        if(
+            this.paddleX < this.x // Greater than the left side
+            && this.y < parseFloat(this.paddleY) + parseFloat(this.paddleHeight) // Less than bottom of paddle
+            && this.y > parseFloat(this.paddleY)  // Greater than top of the paddle
+            && this.x < (this.paddleX+parseFloat(this.paddleWidth) // Less than right side of paddle
+            
+            )){
+            this.yNegative = true; // Reflect ball back up
+        }
+        
+    }
+
+    gameDone(){
+        // Called in playGame and will stop game and change level when true
+        return this.blocks.every((val1) => val1.every((val2) => val2 === 0));
+    }
 }
 
 /******************************** PLAY GAME ***********************************/
-let screen = new GameScreen([[1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]]);
-screen.drawBlocks();
-setInterval(() => {
-    screen.moveBall();
-    let redraw = screen.checkBallOverBlocks();
-    if(!redraw){
-        // If the ball hit a block, then redraw the board
-        screen.drawBlocks();
+class Game{
+    constructor(){
+        this.level = 0;
+        this.score = 0;
+        this.gameOver = false;
     }
-    
-}, 1);
+}
+
+playGame=(array)=>{
+    let screen = new GameScreen(array);
+    screen.drawBlocks();
+      
+    setInterval(() => {
+        screen.moveBall();
+        
+        let redraw = screen.checkBallOverBlocks();
+        screen.checkPaddleHit(); // Check if ball hit paddle
+        if (!redraw) {
+            // If the ball hit a block, then redraw the board
+            screen.drawBlocks();
+            screen.movePaddle();
+        }
+        screen.movePaddle();
+    }, 1);
+}
+
+playGame([[1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1], [1, 1, 1, 1, 1, 1]]);
+// playGame([[0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0]]);
+
 
 
 
