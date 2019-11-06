@@ -1,0 +1,11 @@
+body{
+  width: 100vw;
+  height: 100vh;
+
+  background-color: rgb(245, 236, 199);
+}
+
+/* svg{
+    display: block;
+    margin: 0 auto;
+} */
